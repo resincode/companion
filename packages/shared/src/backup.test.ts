@@ -8,6 +8,8 @@ import {
   planRestore,
   readBackup,
 } from './backup';
+import { JARGON_REVIEW_PREFIX } from './storage';
+import type { MeetingJargonReview } from './types';
 
 /** A dump shaped like the real thing: two meetings, plus every secret. */
 const dump = {
@@ -153,6 +155,68 @@ describe('archive round-trip', () => {
     expect(Object.keys(restored).sort()).toEqual(Object.keys(portable).sort());
     expect(countMeetings(restored)).toBe(countMeetings(portable));
     expect(hash(restored)).toBe(hash(portable));
+  });
+
+  it('restores review decisions, definition snapshots and evidence without replacing newer decisions', () => {
+    const review: MeetingJargonReview = {
+      status: 'done',
+      updatedAt: '2026-09-01T02:00:00Z',
+      reviewedAt: '2026-09-01T02:00:00Z',
+      reviewedEntryCount: 2,
+      items: [
+        {
+          id: '["E1","raw","unpad","ctx_unpaid"]',
+          origin: 'llm',
+          status: 'confirmed',
+          miniContextId: 'ctx_unpaid',
+          term: 'unpaid',
+          definition: 'invoice not yet settled',
+          reason: 'The customer has not paid.',
+          evidence: [
+            {
+              entryId: 'E1',
+              variant: 'raw',
+              sourceText: 'invoice ini masih unpad, pelanggan belum membayar',
+              observed: 'unpad',
+            },
+          ],
+        },
+        {
+          id: '["E2","clean","kode biru",null]',
+          origin: 'llm',
+          status: 'dismissed',
+          miniContextId: null,
+          term: 'kode biru',
+          definition: '',
+          reason: 'An expression needing clarification.',
+          evidence: [
+            {
+              entryId: 'E2',
+              variant: 'clean',
+              sourceText: 'kode biru artinya eskalasi yang disepakati tim',
+              observed: 'kode biru',
+            },
+          ],
+        },
+      ],
+    };
+    const key = JARGON_REVIEW_PREFIX + 'meet-abc';
+    const archive = readBackup(
+      JSON.stringify(makeBackup({ ...dump, [key]: review }, '1.7.0', new Date('2026-09-01T03:00:00Z'))),
+    );
+    const restored = planRestore({}, archive).writes;
+    expect(restored[key]).toEqual(review);
+    expect(countMeetings(restored)).toBe(2);
+
+    const newerReview: MeetingJargonReview = {
+      ...review,
+      updatedAt: '2026-09-02T02:00:00Z',
+      items: [],
+    };
+    const existing = { [key]: newerReview };
+    const additive = planRestore(existing, archive);
+    expect(additive.writes[key]).toBeUndefined();
+    expect({ ...existing, ...additive.writes }[key]).toEqual(newerReview);
   });
 });
 

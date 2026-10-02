@@ -305,3 +305,30 @@ export interface MiniContext {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface JargonEvidence {
+  entryId: string;
+  variant: 'raw' | 'clean';
+  sourceText: string;
+  observed: string;
+}
+
+export interface MeetingJargonItem {
+  id: string;
+  origin: 'llm' | 'manual';
+  status: 'suggested' | 'confirmed' | 'dismissed';
+  miniContextId: string | null;
+  term: string;
+  definition: string;
+  reason: string;
+  evidence: JargonEvidence[];
+}
+
+export interface MeetingJargonReview {
+  status: 'idle' | 'processing' | 'done' | 'error';
+  updatedAt: string;
+  reviewedAt?: string;
+  reviewedEntryCount?: number;
+  error?: string;
+  items: MeetingJargonItem[];
+}

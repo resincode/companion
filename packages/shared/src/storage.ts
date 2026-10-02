@@ -14,6 +14,7 @@ import {
   type IntegrationSettings,
   type Meeting,
   type MeetingDocs,
+  type MeetingJargonReview,
   type MeetingMeta,
   type MiniContext,
   type OAuthSettings,
@@ -33,6 +34,7 @@ export const CHAT_PREFIX = 'chat:';
 export const DOCS_PREFIX = 'docs:';
 export const RESOLVED_PREFIX = 'resolved:';
 export const CLEAN_PREFIX = 'clean:';
+export const JARGON_REVIEW_PREFIX = 'jargon-review:';
 export const DOCPROG_PREFIX = 'docprog:';
 export const TITLE_PREFIX = 'title:';
 export const CONTEXT_PREFIX = 'context:';
@@ -180,6 +182,7 @@ export async function clearMeeting(id: string): Promise<void> {
     DOCPROG_PREFIX + id,
     RESOLVED_PREFIX + id,
     CLEAN_PREFIX + id,
+    JARGON_REVIEW_PREFIX + id,
     TITLE_PREFIX + id,
     CONTEXT_PREFIX + id,
     MEETING_TAGS_PREFIX + id,
@@ -242,6 +245,18 @@ export async function getMiniContexts(): Promise<MiniContext[]> {
 
 export async function saveMiniContexts(contexts: MiniContext[]): Promise<void> {
   await chrome.storage.local.set({ [MINI_CONTEXTS_KEY]: contexts });
+}
+
+// -- meeting-local jargon suggestions and confirmed definition snapshots --
+
+export async function getJargonReview(id: string): Promise<MeetingJargonReview | null> {
+  const key = JARGON_REVIEW_PREFIX + id;
+  const res = await chrome.storage.local.get(key);
+  return (res[key] as MeetingJargonReview | undefined) ?? null;
+}
+
+export async function saveJargonReview(id: string, review: MeetingJargonReview): Promise<void> {
+  await chrome.storage.local.set({ [JARGON_REVIEW_PREFIX + id]: review });
 }
 
 // -- cleaned transcript (AI-corrected ASR errors, kept alongside the raw one) --

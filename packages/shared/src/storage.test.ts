@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   appendAudit,
+  clearMeeting,
   ensureReleaseT0,
   getReleaseT0,
   loadAudit,
@@ -17,6 +18,9 @@ import {
   saveMeetingTags,
   getMiniContexts,
   saveMiniContexts,
+  getJargonReview,
+  saveJargonReview,
+  JARGON_REVIEW_PREFIX,
   watchStorage,
   ANALYSIS_PREFIX,
   AUDIT_KEY,
@@ -32,6 +36,7 @@ import {
   TRANSCRIPT_PREFIX,
   WATCH_DEBOUNCE_MS,
 } from './storage';
+import type { MeetingJargonReview } from './types';
 
 const entry = (text: string, time: string) => ({ speaker: 'A', text, time });
 
@@ -296,5 +301,68 @@ describe('goals', () => {
     };
     const meetings = parseMeetings(raw);
     expect(meetings[0].goals).toEqual(['Goal A', 'Goal B']);
+  });
+});
+
+describe('meeting jargon review', () => {
+  const review: MeetingJargonReview = {
+    status: 'done',
+    updatedAt: '2026-09-01T02:00:00Z',
+    reviewedAt: '2026-09-01T02:00:00Z',
+    reviewedEntryCount: 1,
+    items: [
+      {
+        id: '["E1","raw","unpad","ctx_unpaid"]',
+        origin: 'llm',
+        status: 'confirmed',
+        miniContextId: 'ctx_unpaid',
+        term: 'unpaid',
+        definition: 'invoice not yet settled',
+        reason: 'The customer has not paid.',
+        evidence: [
+          {
+            entryId: 'E1',
+            variant: 'raw',
+            sourceText: 'invoice ini masih unpad, pelanggan belum membayar',
+            observed: 'unpad',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('distinguishes an absent review from a completed scan with no suggestions', async () => {
+    expect(await getJargonReview('missing')).toBeNull();
+    const emptyReview: MeetingJargonReview = { ...review, items: [] };
+    await saveJargonReview('missing', emptyReview);
+    expect(await getJargonReview('missing')).toEqual(emptyReview);
+  });
+
+  it('retains confirmed definitions and evidence independently of registry changes', async () => {
+    await saveJargonReview('new', review);
+    await saveMiniContexts([
+      {
+        id: 'ctx_unpaid',
+        term: 'unpaid',
+        definition: 'a later registry definition',
+        tags: [],
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-02T00:00:00Z',
+      },
+    ]);
+    expect(await getJargonReview('new')).toEqual(review);
+    await saveMiniContexts([]);
+    expect(await getJargonReview('new')).toEqual(review);
+  });
+
+  it('removes the review with its meeting without removing another meeting review', async () => {
+    await saveJargonReview('new', review);
+    await saveJargonReview('old', review);
+    await clearMeeting('new');
+    expect(await getJargonReview('new')).toBeNull();
+    expect(store[JARGON_REVIEW_PREFIX + 'new']).toBeUndefined();
+    expect(store[TRANSCRIPT_PREFIX + 'new']).toBeUndefined();
+    expect(await getJargonReview('old')).toEqual(review);
+    expect(store[TRANSCRIPT_PREFIX + 'old']).toEqual(RAW[TRANSCRIPT_PREFIX + 'old']);
   });
 });

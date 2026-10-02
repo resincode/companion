@@ -8,6 +8,7 @@
  */
 
 import type { AnalysisRecord, Diagram, Entry, MeetingMeta } from '@meetcc/shared';
+import { t } from '@meetcc/shared/i18n';
 import mockSeedsData from './mockSeeds.json';
 
 const STORAGE_KEY = 'meetcc_dev_storage';
@@ -357,6 +358,9 @@ function handleMockDbOperation(op?: string, args?: Record<string, unknown>) {
 async function handleMockRuntimeMessage(msg: unknown): Promise<unknown> {
   console.info('[Dev Mock chrome.runtime.sendMessage]', msg);
   const m = msg as { type?: string; op?: string; args?: Record<string, unknown>; question?: string } | undefined;
+  if (m?.type === 'review-jargon' || m?.type === 'update-jargon-review') {
+    return { ok: false, error: t('ext.jargon.loadedExtensionOnly') };
+  }
   if (m?.type === 'db') {
     return handleMockDbOperation(m.op, m.args);
   }

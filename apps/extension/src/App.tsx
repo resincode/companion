@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onLangChange, t } from '@meetcc/shared/i18n';
 import {
   ANALYSIS_PREFIX,
   CONTEXT_PREFIX,
+  GOALS_PREFIX,
+  MEETING_TAGS_PREFIX,
   META_PREFIX,
   TITLE_PREFIX,
   TRANSCRIPT_PREFIX,
   clearMeeting,
   displayMeetingId,
   isLive,
+  effectiveClean,
+  isJargonEvidenceValid,
+  loadClean,
   loadDashboard,
   saveTitle,
   watchStorage,
   type AnalysisRecord,
   type Meeting,
+  type JargonEvidence,
 } from '@meetcc/shared';
 import { Button, SegmentedControl, TextInput, ToastProvider, useToast } from '@meetcc/ui';
 import { ContextGoalsView } from './components/ContextGoalsView';
@@ -106,6 +112,15 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [seedQuestion, setSeedQuestion] = useState<string | undefined>();
   const [now, setNow] = useState(() => Date.now());
+  const [jargonNavigation, setJargonNavigation] = useState<{
+    meetingId: string;
+    focusSection: 'review' | 'clarify';
+    seed?: JargonEvidence;
+    returnTo: Tab;
+  } | null>(null);
+  const [evidenceFocus, setEvidenceFocus] = useState<{ meetingId: string; evidence: JargonEvidence } | null>(null);
+  const [navigationError, setNavigationError] = useState('');
+  const activeMeetingId = useRef<string | null>(null);
   const toast = useToast();
 
   const refresh = useCallback(() => {
@@ -124,6 +139,8 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
       ANALYSIS_PREFIX,
       TITLE_PREFIX,
       CONTEXT_PREFIX,
+      GOALS_PREFIX,
+      MEETING_TAGS_PREFIX,
     ]);
     const tick = setInterval(() => setNow(Date.now()), 5000);
     // ⌘K / Ctrl-K opens search from anywhere, including while typing in a view
@@ -157,6 +174,38 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
       null
     );
   }, [meetings, selectedId, now]);
+
+  activeMeetingId.current = selected?.id ?? null;
+  useEffect(() => {
+    setJargonNavigation(null);
+    setEvidenceFocus(null);
+    setNavigationError('');
+  }, [selected?.id]);
+
+  const openJargon = (focusSection: 'review' | 'clarify', seed?: JargonEvidence) => {
+    if (!selected) return;
+    setJargonNavigation({ meetingId: selected.id, focusSection, seed, returnTo: tab });
+    setNavigationError('');
+    setTab('context');
+  };
+
+  const viewEvidence = async (evidence: JargonEvidence) => {
+    if (!selected) return;
+    const meetingId = selected.id;
+    try {
+      const clean = await loadClean(meetingId);
+      if (activeMeetingId.current !== meetingId) return;
+      if (!isJargonEvidenceValid(evidence, selected.entries, effectiveClean(selected.entries, clean))) {
+        setNavigationError(t('pkg.jargon.staleEvidence'));
+        return;
+      }
+      setNavigationError('');
+      setEvidenceFocus({ meetingId, evidence });
+      setTab('transcript');
+    } catch (error) {
+      if (activeMeetingId.current === meetingId) setNavigationError((error as Error).message);
+    }
+  };
 
   const selectedRecord = selected ? (records[selected.id] ?? null) : null;
   const analysis = selectedRecord?.status === 'done' ? selectedRecord.analysis : null;
@@ -262,11 +311,20 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
               </nav>
             </header>
             <MeetingHeader sessionId={selected.id} onOpenMeeting={openMeeting} />
+            {navigationError && <p role="alert" className="error-box">{navigationError}</p>}
             {tab === 'transcript' ? (
               <Transcript
                 meeting={selected}
                 live={isLive(selected, now)}
                 onClear={handleClear}
+                focusEntryId={evidenceFocus?.meetingId === selected.id ? evidenceFocus.evidence.entryId : undefined}
+                focusVariant={evidenceFocus?.meetingId === selected.id ? evidenceFocus.evidence.variant : undefined}
+                onClarifyTerm={(entryId, variant, observed) => {
+                  const index = selected.entries.findIndex((entry, i) => (entry.id ?? `E${i + 1}`) === entryId);
+                  const line = selected.entries[index];
+                  if (!line) return;
+                  openJargon('clarify', { entryId, variant, sourceText: line.text, observed });
+                }}
               />
             ) : tab === 'diagram' ? (
               <DiagramView
@@ -281,6 +339,10 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
                 meeting={selected}
                 record={selectedRecord}
                 live={isLive(selected, now)}
+                onViewEvidence={(evidence) => void viewEvidence(evidence)}
+                onClarifyEvidence={(evidence) => openJargon('clarify', evidence)}
+                onClarifyTerm={() => openJargon('clarify')}
+                focusSection={jargonNavigation?.meetingId === selected.id ? jargonNavigation.focusSection : undefined}
               />
             ) : tab === 'docs' ? (
               <DocGen meeting={selected} />
@@ -289,6 +351,8 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
                 meeting={selected}
                 record={selectedRecord}
                 live={isLive(selected, now)}
+                onReviewJargon={() => openJargon('review')}
+                onClarifyTerm={() => openJargon('clarify')}
               />
             )}
           </>

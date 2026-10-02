@@ -24,10 +24,9 @@ export type PipelineResult =
   | { ok: false; reason: 'not-found' | 'empty' | 'already-processing' | 'ai-failed'; error?: string };
 
 // Module-level, so every runPipeline call in this worker process shares one
-// guard per meeting. The `processing` record in storage stays as the second
-// layer (it survives worker restarts); this map closes the check-then-set
-// race that the storage layer alone provably loses (two callers read the old
-// record before either writes).
+// guard per meeting. First analyses also persist `processing` across worker
+// restarts; regeneration keeps the previous `done` record visible and relies
+// on this map to close the check-then-set race between concurrent callers.
 const pipelineRuns = createInFlight<PipelineResult>();
 
 export function runPipeline(
@@ -58,32 +57,39 @@ async function runPipelineInner(
   if (existing?.status === 'processing' && !opts.force) {
     return { ok: false, reason: 'already-processing' };
   }
+  const preserveDone = existing?.status === 'done';
 
   let client: AIClient;
   try {
     client = await deps.createClient();
   } catch (e) {
     const error = (e as Error).message;
-    await deps.setRecord(id, { status: 'error', error, failedAt: deps.now(), provider: 'unknown' });
+    if (!preserveDone) {
+      await deps.setRecord(id, { status: 'error', error, failedAt: deps.now(), provider: 'unknown' });
+    }
     return { ok: false, reason: 'ai-failed', error };
   }
 
-  await deps.setRecord(id, {
-    status: 'processing',
-    step: 'ai',
-    startedAt: deps.now(),
-    provider: client.provider,
-  });
+  if (!preserveDone) {
+    await deps.setRecord(id, {
+      status: 'processing',
+      step: 'ai',
+      startedAt: deps.now(),
+      provider: client.provider,
+    });
+  }
   await deps.audit('pipeline.start', id);
 
   try {
     const analysis = await analyzeMeeting(client, meeting);
-    await deps.setRecord(id, {
-      status: 'processing',
-      step: 'saving',
-      startedAt: deps.now(),
-      provider: client.provider,
-    });
+    if (!preserveDone) {
+      await deps.setRecord(id, {
+        status: 'processing',
+        step: 'saving',
+        startedAt: deps.now(),
+        provider: client.provider,
+      });
+    }
     await deps.setRecord(id, {
       status: 'done',
       analysis,
@@ -100,12 +106,14 @@ async function runPipelineInner(
     return { ok: true };
   } catch (e) {
     const error = (e as Error).message;
-    await deps.setRecord(id, {
-      status: 'error',
-      error,
-      failedAt: deps.now(),
-      provider: client.provider,
-    });
+    if (!preserveDone) {
+      await deps.setRecord(id, {
+        status: 'error',
+        error,
+        failedAt: deps.now(),
+        provider: client.provider,
+      });
+    }
     await deps.audit('pipeline.error', `${id}: ${error}`);
     deps.notify(t('pkg.meeting.notifyFailed'), `Meeting ${id}: ${error}`, id);
     return { ok: false, reason: 'ai-failed', error };

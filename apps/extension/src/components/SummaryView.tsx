@@ -10,6 +10,7 @@ import { datedCount, toChecklist, toIcs } from '@meetcc/exporters/tasks';
 import { lazyImport } from '../lib/lazy';
 import { classifyBridgeError } from '../lib/bridgeError';
 import { Button, useToast } from '@meetcc/ui';
+import { CurrentContextCard } from './CurrentContextCard';
 
 function downloadBlob(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -157,9 +158,11 @@ interface Props {
   meeting: Meeting;
   record: AnalysisRecord | null;
   live: boolean;
+  onReviewJargon(): void;
+  onClarifyTerm(): void;
 }
 
-export function SummaryView({ meeting, record, live }: Props) {
+export function SummaryView({ meeting, record, live, onReviewJargon, onClarifyTerm }: Props) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -276,6 +279,7 @@ export function SummaryView({ meeting, record, live }: Props) {
           {record.provisional &&
             ' · MoM sementara dari transcript sejauh ini — diganti otomatis setelah meeting selesai'}
         </div>
+        <CurrentContextCard meeting={meeting} onReviewJargon={onReviewJargon} onClarifyTerm={onClarifyTerm} />
         <Result meeting={meeting} analysis={record.analysis} />
       </>
     );

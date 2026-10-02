@@ -10,3 +10,4 @@ export * from './import';
 export * from './calendar';
 export * from './issues';
 export * from './sync';
+export * from './jargon';

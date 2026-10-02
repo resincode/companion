@@ -7,6 +7,7 @@ export * from './analyze';
 export * from './ask';
 export * from './retrieval';
 export * from './clean';
+export * from './jargon';
 export * from './diagram';
 export * from './docgen';
 export * from './ratelimit';

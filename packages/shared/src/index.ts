@@ -1,5 +1,6 @@
 export * from './types';
 export * from './entries';
+export * from './jargon';
 export * from './session';
 export * from './provider';
 export * from './storage';

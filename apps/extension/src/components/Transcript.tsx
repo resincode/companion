@@ -4,6 +4,7 @@ import {
   CLEAN_PREFIX,
   cleanChanges,
   effectiveClean,
+  entryId,
   loadClean,
   saveClean,
   watchStorage,
@@ -42,6 +43,11 @@ interface Props {
   meeting: Meeting
   live: boolean
   onClear: () => void
+  /** Evidence navigation: which line to reveal, and in which variant. */
+  focusEntryId?: string
+  focusVariant?: 'raw' | 'clean'
+  /** Post-meeting clarification entry point for a single line. */
+  onClarifyTerm?: (entryId: string, variant: 'raw' | 'clean', observed: string) => void
 }
 
 /** Keys, not text: resolved at render time so the labels follow the language. */
@@ -52,7 +58,7 @@ const HIGHLIGHT_LABEL: Record<string, Parameters<typeof t>[0]> = {
   risk: 'ext.kind.risk',
 }
 
-export function Transcript({ meeting, live, onClear }: Props) {
+export function Transcript({ meeting, live, onClear, focusEntryId, focusVariant, onClarifyTerm }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const toast = useToast()
@@ -164,6 +170,33 @@ export function Transcript({ meeting, live, onClear }: Props) {
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [entries])
 
+  // Evidence navigation: select the cited variant first, then scroll the line
+  // into view and focus it. Applies once per request so a later manual variant
+  // switch is not reverted. A missing entry is deliberately a no-op — the
+  // parent validated the evidence already and owns the stale-evidence message.
+  const appliedFocus = useRef('')
+  useEffect(() => {
+    if (!focusEntryId) {
+      appliedFocus.current = ''
+      return
+    }
+    const want = focusVariant ?? 'raw'
+    const request = `${focusEntryId}:${want}`
+    if (appliedFocus.current === request) return
+    if (want === 'clean' && (!cleaned || record?.status !== 'done')) return
+    if (view !== want) {
+      setView(want)
+      return
+    }
+    const nodes = ref.current?.querySelectorAll<HTMLElement>('[data-entry-id]')
+    const el = nodes ? [...nodes].find((node) => node.dataset.entryId === focusEntryId) : undefined
+    if (!el) return
+    appliedFocus.current = request
+    stick.current = false
+    el.scrollIntoView({ block: 'center' })
+    el.focus({ preventScroll: true })
+  }, [focusEntryId, focusVariant, view, entries, cleaned, record?.status])
+
   // who actually talked — derived from the lines already on screen, no query
   const talk = useMemo(() => speakerStats(entries), [entries])
 
@@ -186,6 +219,18 @@ export function Transcript({ meeting, live, onClear }: Props) {
       toast('error', t('ext.failed', { error: (e as Error).message }))
     }
     reload()
+  }
+
+  // Post-meeting: hand the cited line to the clarification form. Any text the
+  // user selected inside that line is offered as the phrase; a selection that
+  // is not actually part of the line is dropped rather than pre-filled.
+  const clarify = (index: number, line: Entry) => {
+    if (!onClarifyTerm) return
+    const selected = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : ''
+    const phrase = selected.trim().replace(/\s+/g, ' ')
+    const source = line.text.trim().replace(/\s+/g, ' ').toLowerCase()
+    const observed = phrase && source.includes(phrase.toLowerCase()) ? phrase : ''
+    onClarifyTerm(line.id ?? entryId(index), view === 'clean' && cleaned ? 'clean' : 'raw', observed)
   }
 
   return (
@@ -342,7 +387,9 @@ export function Transcript({ meeting, live, onClear }: Props) {
             return (
               <article
                 className={`entry ${flag ? 'entry-flagged' : ''}`}
-                key={`${e.time}-${i}`}>
+                key={`${e.time}-${i}`}
+                data-entry-id={e.id ?? entryId(i)}
+                tabIndex={-1}>
                 <Avatar src={e.avatar} name={e.speaker} />
                 <div className='entry-body'>
                   <div className='entry-head'>
@@ -380,6 +427,13 @@ export function Transcript({ meeting, live, onClear }: Props) {
                       </span>
                       <Button className='clean-toggle'
                       onClick={() => void keepOriginal(i, !changedAt.get(i)!.kept)}>{changedAt.get(i)!.kept ? t('ext.transcript.useAi') : t('ext.transcript.useOriginal')}</Button>
+                    </div>
+                  )}
+                  {!live && onClarifyTerm && (
+                    <div className='entry-actions'>
+                      <Button
+                        title={t('ext.transcript.clarifyTermHint')}
+                        onClick={() => clarify(i, e)}>{t('ext.transcript.clarifyTerm')}</Button>
                     </div>
                   )}
                 </div>

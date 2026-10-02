@@ -2713,3 +2713,131 @@ body[data-theme='light'] .field-row input[list]::-webkit-calendar-picker-indicat
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Meeting-local jargon review */
+.jargon-panel {
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.jargon-panel h2, .jargon-panel h3, .jargon-panel h4 {
+  margin: 0 0 10px;
+}
+
+.jargon-panel h2 { font-size: 18px; }
+.jargon-panel h3 { font-size: 15px; margin-top: 20px; }
+.jargon-panel h4 { font-size: 14px; }
+
+.jargon-toolbar, .jargon-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jargon-toolbar { justify-content: space-between; }
+
+.jargon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+
+.jargon-card {
+  min-width: 0;
+  padding: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  overflow-wrap: anywhere;
+}
+
+.jargon-panel p { margin: 8px 0; line-height: 1.5; }
+.jargon-meta { color: var(--text-dim); font-size: 12px; }
+.jargon-notice { color: var(--amber); font-size: 12px; }
+
+.jargon-evidence {
+  margin: 12px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.jargon-evidence blockquote {
+  margin: 8px 0;
+  padding: 4px 10px;
+  border-left: 2px solid var(--hairline-2);
+  white-space: pre-wrap;
+}
+
+.jargon-wording { font-size: 12px; }
+.jargon-wording strong { display: block; color: var(--text-dim); }
+.jargon-review-control { padding: 12px 0; overflow-wrap: anywhere; }
+.jargon-registry { margin-top: 20px; }
+.jargon-registry summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
+.jargon-registry label { display: block; margin-bottom: 6px; }
+.jargon-registry input { width: 100%; margin-bottom: 12px; }
+.jargon-panel button { max-width: 100%; white-space: normal; }
+.jargon-panel [tabindex="-1"]:focus { outline: 2px solid var(--phosphor); outline-offset: 4px; }
+
+/* Post-meeting clarification form and transcript clarify affordance */
+.entry-actions { margin-top: 6px; }
+.entry:focus { outline: 2px solid var(--phosphor); outline-offset: 4px; }
+.jargon-clarify label { display: block; margin: 10px 0 4px; }
+.jargon-clarify input, .jargon-clarify textarea { width: 100%; }
+.jargon-clarify .jargon-lines { max-height: 220px; overflow-y: auto; }
+.jargon-clarify .jargon-line { width: 100%; text-align: left; }
+
+.current-context-card {
+  margin: 0 0 18px;
+  padding: 16px;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+
+.current-context-card h2 { margin: 0 0 12px; font-size: 16px; }
+.current-context-card h3 { margin: 12px 0 8px; font-size: 13px; }
+.current-context-card h4 { margin: 0 0 6px; font-size: 13px; }
+.current-context-card .jargon-card { margin: 8px 0; padding: 10px 12px; }
+.current-context-card p { margin: 6px 0; }
+.current-context-card .jargon-actions { margin-top: 12px; }
+.current-context-card button { max-width: 100%; white-space: normal; }
+
+@media (max-width: 700px) {
+  .app { flex-direction: column; height: auto; min-height: 100vh; }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 42vh;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .sidebar-top { padding: 8px 12px; gap: 6px; }
+  .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
+  .sidebar-nav-btn { flex: 1; }
+  .sidebar-scroll { flex: none; min-height: 90px; max-height: 160px; padding: 8px 10px; }
+  .sidebar-bottom { padding: 6px 12px; }
+  .sidebar-foot { flex-wrap: wrap; }
+  .sidebar.collapsed {
+    width: 100%;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 6px;
+    gap: 6px;
+  }
+  .main { width: 100%; }
+  .toolbar, .subbar, .context-view-toolbar, .summary-context-footer { flex-wrap: wrap; }
+  .toolbar-title { width: 100%; }
+  .title-btn, .title-input { max-width: 100%; }
+  .tabs { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; padding-bottom: 4px; }
+  .tabs > * { flex-shrink: 0; }
+  .subbar button, .context-view button { max-width: 100%; white-space: normal; }
+  .goal-add-row { flex-wrap: wrap; }
+  .goal-add-row input { min-width: 0; }
+  .summary-context-popover { max-width: calc(100vw - 32px); }
+  .jargon-panel { padding: 0 12px 16px; }
+}

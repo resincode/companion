@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { t } from '@meetcc/shared/i18n';
 import type { Meeting, MiniContext } from '@meetcc/shared';
 import {
-  saveContext,
-  getContext,
-  getMeetingTags,
-  saveMeetingTags,
   getMiniContexts,
   watchStorage,
   MINI_CONTEXTS_KEY,
-  CONTEXT_PREFIX,
-  MEETING_TAGS_PREFIX,
 } from '@meetcc/shared';
 import { Button, TextArea } from '@meetcc/ui';
 
@@ -34,51 +28,43 @@ function buildTagToContextsMap(contexts: MiniContext[]): Map<string, MiniContext
   return map;
 }
 
-export function ContextCard({ meeting }: { meeting: Meeting }) {
-  const [context, setContext] = useState(meeting.context ?? '');
-  const [selectedTags, setSelectedTags] = useState<string[]>(meeting.tags ?? []);
-  const [open, setOpen] = useState(!meeting.context?.trim() && (!meeting.tags || meeting.tags.length === 0));
-  const [saved, setSaved] = useState(false);
+interface Props {
+  meeting: Meeting;
+  context: string;
+  tags: string[];
+  onContextChange(context: string): void;
+  onTagsChange(tags: string[]): void;
+  onSave(): void;
+  saving: boolean;
+}
+
+export function ContextCard(props: Props) {
+  return <ContextCardEditor key={props.meeting.id} {...props} />;
+}
+
+function ContextCardEditor({
+  context, tags: selectedTags, onContextChange, onTagsChange, onSave, saving,
+}: Props) {
+  const inputId = useId();
+  const [open, setOpen] = useState(!context.trim() && selectedTags.length === 0);
   const [availableContexts, setAvailableContexts] = useState<MiniContext[]>([]);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  const loadMiniContextsList = () => {
-    void getMiniContexts().then(setAvailableContexts).catch(() => undefined);
-  };
-
-  useEffect(() => {
-    loadMiniContextsList();
-    return watchStorage(loadMiniContextsList, [MINI_CONTEXTS_KEY]);
-  }, []);
-
   useEffect(() => {
     let alive = true;
-    void getContext(meeting.id).then((stored) => {
-      if (alive) {
-        const val = stored || meeting.context || '';
-        setContext(val);
-      }
-    });
-    void getMeetingTags(meeting.id).then((storedTags) => {
-      if (alive) {
-        setSelectedTags(storedTags || meeting.tags || []);
-      }
-    });
+    const reload = () => {
+      void getMiniContexts().then((contexts) => {
+        if (alive) setAvailableContexts(contexts);
+      }).catch(() => undefined);
+    };
+    reload();
+    const unsubscribe = watchStorage(reload, [MINI_CONTEXTS_KEY]);
     return () => {
       alive = false;
+      unsubscribe();
     };
-  }, [meeting.id, meeting.context, meeting.tags]);
+  }, []);
 
-  useEffect(() => {
-    return watchStorage(() => {
-      void getContext(meeting.id).then((ctx) => {
-        if (ctx !== undefined) setContext(ctx);
-      });
-      void getMeetingTags(meeting.id).then((tags) => {
-        if (tags !== undefined) setSelectedTags(tags);
-      });
-    }, [CONTEXT_PREFIX + meeting.id, MEETING_TAGS_PREFIX + meeting.id]);
-  }, [meeting.id]);
 
   const tagToContexts = useMemo(() => buildTagToContextsMap(availableContexts), [availableContexts]);
 
@@ -94,20 +80,14 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
     return map;
   }, [tagToContexts]);
 
-  const handleSave = async () => {
-    await saveContext(meeting.id, context);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
 
-  const toggleTag = async (tag: string) => {
+  const toggleTag = (tag: string) => {
     const lower = tag.toLowerCase();
     const isAttached = selectedTags.some((t) => t.toLowerCase() === lower);
     const nextTags = isAttached
       ? selectedTags.filter((t) => t.toLowerCase() !== lower)
       : [...selectedTags, lower];
-    setSelectedTags(nextTags);
-    await saveMeetingTags(meeting.id, nextTags).catch(() => undefined);
+    onTagsChange(nextTags);
   };
 
   const isCtxActive = (ctx: MiniContext) => {
@@ -117,14 +97,13 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
     );
   };
 
-  const toggleSingle = async (ctx: MiniContext) => {
+  const toggleSingle = (ctx: MiniContext) => {
     const termLower = ctx.term.toLowerCase();
     const isAttached = selectedTags.some((t) => t.toLowerCase() === termLower);
     const nextTags = isAttached
       ? selectedTags.filter((t) => t.toLowerCase() !== termLower)
       : [...selectedTags, termLower];
-    setSelectedTags(nextTags);
-    await saveMeetingTags(meeting.id, nextTags).catch(() => undefined);
+    onTagsChange(nextTags);
   };
 
   const hasContext = !!context.trim() || selectedTags.length > 0;
@@ -152,12 +131,14 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
       </Button>
       {open && (
         <div className="summary-context-body">
+          <label htmlFor={inputId}>{t('ext.context.contextLabel')}</label>
           <TextArea
+            id={inputId}
             className="summary-context-input"
             value={context}
             placeholder={t('ext.summary.contextPlaceholder')}
-            onChange={(e) => setContext(e.target.value)}
-            onBlur={handleSave}
+            onChange={(e) => onContextChange(e.target.value)}
+            disabled={saving}
             rows={3}
           />
           {selectedTags.length > 0 && (
@@ -171,6 +152,7 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
                       type="button"
                       className="summary-active-tag-remove"
                       onClick={() => void toggleTag(tg)}
+                      disabled={saving}
                       aria-label={t('ext.header.close')}
                     >
                       ✕
@@ -194,6 +176,7 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
                     type="button"
                     className={`quick-insert-tag-btn ${isAttached ? 'active' : ''}`}
                     onClick={() => void toggleTag(tg)}
+                    disabled={saving}
                     title={t('ext.header.insertAllWithTag', { tag: tg, count })}
                   >
                     {isAttached ? '✓' : '+'} #{tg} <span className="tag-count">({count})</span>
@@ -231,6 +214,7 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
                               type="button"
                               className={`summary-ctx-item-btn ${active ? 'active' : ''}`}
                               onClick={() => void toggleSingle(ctx)}
+                              disabled={saving}
                             >
                               <span className="ctx-item-term">
                                 {active ? '✓ ' : ''}{ctx.term}
@@ -255,8 +239,8 @@ export function ContextCard({ meeting }: { meeting: Meeting }) {
             <span className="dim" style={{ fontSize: 11 }}>
               {t('ext.summary.contextHint')}
             </span>
-            <Button type="button" className="small" variant="primary" onClick={handleSave}>
-              {saved ? t('ext.summary.contextSaved') : t('ext.summary.contextSave')}
+            <Button type="button" className="small" variant="primary" onClick={onSave} disabled={saving}>
+              {saving ? t('ext.context.saving') : t('ext.summary.contextSave')}
             </Button>
           </div>
         </div>

@@ -15,6 +15,9 @@ import {
   findFinishedMeetings,
   runDocGen,
   runPipeline,
+  runJargonReview,
+  updateJargonReview,
+  type JargonReviewDeps,
   type DocGenDeps,
   type PipelineDeps,
   type PipelineOptions,
@@ -31,6 +34,7 @@ import { getStore, handleDb, refreshHighlights, syncIndex } from './db';
 import {
   appendAudit,
   AUDIT_RING_MAX,
+  buildMeetingContextBlock,
   clearClean,
   clearDocProgress,
   clearMeeting,
@@ -39,9 +43,11 @@ import {
   ensureReleaseT0,
   fetchLatestRelease,
   getAnalysis,
+  getContext,
   getGoals,
   getMeetingTags,
   getMiniContexts,
+  getJargonReview,
   getTitle,
   loadAnalyses,
   loadAudit,
@@ -51,12 +57,15 @@ import {
   loadMeetings,
   loadSettings,
   resolveSession,
+  resolveMeetingMiniContexts,
   sanitizeRoomId,
   saveChat,
   saveClean,
   saveDoc,
   saveDocProgress,
   saveTitle,
+  saveJargonReview,
+  saveMiniContexts,
   setAnalysis,
   UPDATE_KEY,
   type Analysis,
@@ -105,50 +114,18 @@ async function loadMeetingForAI(id: string): Promise<Meeting | null> {
       ? meeting.entries
       : effectiveClean(meeting.entries, clean);
 
-  // §context: Enrich context with terms from active tags / glossary for AI accuracy
-  const tags = meeting.tags ?? (await getMeetingTags(id));
-  const goals = meeting.goals ?? (await getGoals(id));
-  let context = meeting.context ?? '';
-  if (tags && tags.length > 0) {
-    const miniContexts = await getMiniContexts();
-    const tagSet = new Set(tags.map((t) => t.toLowerCase()));
-    const matched = miniContexts.filter(
-      (c) =>
-        tagSet.has(c.term.toLowerCase()) ||
-        c.tags.some((tg) => tagSet.has(tg.toLowerCase())),
-    );
-    if (matched.length > 0) {
-      const glossaryLines = matched.map((c) => `[${c.term}]: ${c.definition}`);
-      const glossaryBlock = `Istilah & Konteks Tambahan:\n${glossaryLines.join('\n')}`;
-      context = context.trim() ? `${context.trim()}\n\n${glossaryBlock}` : glossaryBlock;
-    }
-  }
-
-  return { ...meeting, context, goals, entries: baseEntries };
+  const [tags, goals, savedContext, registry, review] = await Promise.all([
+    getMeetingTags(id),
+    getGoals(id),
+    getContext(id),
+    getMiniContexts(),
+    getJargonReview(id),
+  ]);
+  const contexts = resolveMeetingMiniContexts(tags, registry, review);
+  const context = buildMeetingContextBlock(savedContext, goals, contexts, review);
+  return { ...meeting, context, tags, goals, entries: baseEntries };
 }
 
-async function buildCleanContextBlock(meeting: Meeting): Promise<string> {
-  const parts: string[] = [];
-  if (meeting.context?.trim()) parts.push(meeting.context.trim());
-  if (meeting.goals && meeting.goals.length > 0) {
-    const goals = meeting.goals.map((g, i) => `${i + 1}. ${g}`).join('\n');
-    parts.push(`Tujuan Rapat:\n${goals}`);
-  }
-  if (meeting.tags && meeting.tags.length > 0) {
-    const tagSet = new Set(meeting.tags.map((t) => t.toLowerCase()));
-    const miniContexts = await getMiniContexts();
-    const matched = miniContexts.filter(
-      (c) =>
-        tagSet.has(c.term.toLowerCase()) ||
-        c.tags.some((tg) => tagSet.has(tg.toLowerCase())),
-    );
-    if (matched.length > 0) {
-      const glossary = matched.map((c) => `[${c.term}]: ${c.definition}`).join('\n');
-      parts.push(`Istilah & Konteks Tambahan:\n${glossary}`);
-    }
-  }
-  return parts.join('\n\n');
-}
 
 // The notification id IS the meeting id, so onClicked can open that meeting.
 function notify(title: string, message: string, meetingId: string): void {
@@ -159,6 +136,17 @@ function notify(title: string, message: string, meetingId: string): void {
     message,
   });
 }
+
+const jargonDeps: JargonReviewDeps = {
+  getMeeting: async (id) => (await loadMeetings()).find((meeting) => meeting.id === id) ?? null,
+  getClean: loadClean,
+  getRegistry: getMiniContexts,
+  getReview: getJargonReview,
+  saveReview: saveJargonReview,
+  saveRegistry: saveMiniContexts,
+  createClient: makeInteractiveClient,
+  now: () => new Date().toISOString(),
+};
 
 const deps: PipelineDeps = {
   getMeeting: loadMeetingForAI,
@@ -431,7 +419,7 @@ async function handleCleanTranscript(
   });
   // Build context block from meeting context, goals, and attached mini-contexts
   const meetingForAi = await loadMeetingForAI(id);
-  const contextBlock = meetingForAi ? await buildCleanContextBlock(meetingForAi) : undefined;
+  const contextBlock = meetingForAi?.context;
   try {
     const client = await makeInteractiveClient();
     const { entries, changed } = await cleanTranscript(
@@ -468,7 +456,7 @@ async function handleSuggestGoals(
   if (meeting.entries.length < 5) return { ok: true, goals: [] };
 
   const client = await makeInteractiveClient();
-  const contextBlock = await buildCleanContextBlock(meeting);
+  const contextBlock = meeting.context;
   const transcript = meeting.entries
     .map((e, i) => `[${i}] ${e.speaker}: ${e.text}`)
     .join('\n');
@@ -666,6 +654,18 @@ function handleBridgeMessage(msg: Record<string, unknown>): Promise<unknown> | n
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === 'review-jargon' && typeof msg.meetingId === 'string') {
+    runJargonReview(msg.meetingId, jargonDeps)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: (e as Error).message }));
+    return true;
+  }
+  if (msg?.type === 'update-jargon-review' && typeof msg.meetingId === 'string') {
+    updateJargonReview(msg.meetingId, msg.action, jargonDeps)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: (e as Error).message }));
+    return true;
+  }
   if (msg?.type === 'db' && typeof msg.op === 'string') {
     handleDb({ op: msg.op, args: msg.args })
       .then((data) => sendResponse({ ok: true, data }))
