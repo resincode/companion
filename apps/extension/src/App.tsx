@@ -16,6 +16,7 @@ import {
   type Meeting,
 } from '@meetcc/shared';
 import { Button, SegmentedControl, TextInput, ToastProvider, useToast } from '@meetcc/ui';
+import { ContextGoalsView } from './components/ContextGoalsView';
 import { Sidebar } from './components/Sidebar';
 import { Transcript } from './components/Transcript';
 import { SummaryView } from './components/SummaryView';
@@ -29,13 +30,13 @@ import { DecisionLog } from './components/DecisionLog';
 import { SettingsView } from './components/SettingsView';
 import { UpdateBanner } from './components/UpdateBanner';
 
-type Tab = 'summary' | 'transcript' | 'diagram' | 'ask' | 'docs';
-
+type Tab = 'summary' | 'transcript' | 'context' | 'diagram' | 'ask' | 'docs';
 const TAB_LABELS: Record<Tab, Parameters<typeof t>[0]> = {
   summary: 'ext.tab.summary',
   transcript: 'ext.tab.transcript',
   diagram: 'ext.tab.diagram',
   ask: 'ext.tab.ask',
+  context: 'ext.tab.context',
   docs: 'ext.tab.docs',
 };
 const TABS = Object.keys(TAB_LABELS) as Tab[];
@@ -275,6 +276,12 @@ function Shell({ initialMeeting }: { initialMeeting: string | null }) {
               />
             ) : tab === 'ask' ? (
               <AskView meeting={selected} live={isLive(selected, now)} />
+            ) : tab === 'context' ? (
+              <ContextGoalsView
+                meeting={selected}
+                record={selectedRecord}
+                live={isLive(selected, now)}
+              />
             ) : tab === 'docs' ? (
               <DocGen meeting={selected} />
             ) : (

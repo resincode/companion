@@ -36,13 +36,12 @@ export const CLEAN_PREFIX = 'clean:';
 export const DOCPROG_PREFIX = 'docprog:';
 export const TITLE_PREFIX = 'title:';
 export const CONTEXT_PREFIX = 'context:';
+export const GOALS_PREFIX = 'goals:';
 export const MEETING_TAGS_PREFIX = 'tags:';
 export const MINI_CONTEXTS_KEY = 'mini_contexts';
 const SETTINGS_KEY = 'settings';
 export const AUDIT_KEY = 'audit';
 const RELEASE_T0_KEY = 'releaseT0';
-
-/** Heartbeat is every 5s; 15s of silence means the tab left the call. */
 export const LIVE_THRESHOLD_MS = 15_000;
 
 export function isLive(m: Meeting, now: number): boolean {
@@ -87,6 +86,8 @@ export function parseMeetings(all: Record<string, unknown>): Meeting[] {
       get(key.slice(CONTEXT_PREFIX.length)).context = value;
     } else if (key.startsWith(MEETING_TAGS_PREFIX) && Array.isArray(value)) {
       get(key.slice(MEETING_TAGS_PREFIX.length)).tags = value as string[];
+    } else if (key.startsWith(GOALS_PREFIX) && Array.isArray(value)) {
+      get(key.slice(GOALS_PREFIX.length)).goals = value as string[];
     }
   }
   // Sort by start time, NOT lastActivity: live heartbeats bump lastSeenAt
@@ -182,6 +183,7 @@ export async function clearMeeting(id: string): Promise<void> {
     TITLE_PREFIX + id,
     CONTEXT_PREFIX + id,
     MEETING_TAGS_PREFIX + id,
+    GOALS_PREFIX + id,
   ]);
 }
 
@@ -215,6 +217,21 @@ export async function saveMeetingTags(id: string, tags: string[]): Promise<void>
     await chrome.storage.local.remove(key);
   } else {
     await chrome.storage.local.set({ [key]: tags });
+  }
+}
+
+export async function getGoals(id: string): Promise<string[]> {
+  const key = GOALS_PREFIX + id;
+  const res = await chrome.storage.local.get(key);
+  return (res[key] as string[] | undefined) ?? [];
+}
+
+export async function saveGoals(id: string, goals: string[]): Promise<void> {
+  const key = GOALS_PREFIX + id;
+  if (!goals.length) {
+    await chrome.storage.local.remove(key);
+  } else {
+    await chrome.storage.local.set({ [key]: goals });
   }
 }
 

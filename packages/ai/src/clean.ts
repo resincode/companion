@@ -27,11 +27,12 @@ Balas HANYA satu objek JSON valid (tanpa teks lain) berbentuk:
 Sertakan HANYA baris yang benar-benar kamu ubah. Jika tidak ada yang perlu dikoreksi, balas {"fixes":[]}.`
 
 /** Numbered lines with speaker context; `offset` keeps indices global. */
-export function buildCleanPrompt(entries: Entry[], offset: number): string {
-  return entries.map((e, k) => `[${offset + k}] ${e.speaker}: ${e.text}`).join('\n')
+export function buildCleanPrompt(entries: Entry[], offset: number, contextBlock?: string): string {
+  const lines = entries.map((e, k) => `[${offset + k}] ${e.speaker}: ${e.text}`).join('\n');
+  if (!contextBlock?.trim()) return lines;
+  return `Konteks Rapat & Tujuan:\n${contextBlock.trim()}\n\nTranscript:\n${lines}`;
 }
 
-/** Tolerant extraction of the {fixes:[{i,text}]} object -> index->text map. */
 export function parseFixes(raw: string): Map<number, string> {
   const out = new Map<number, string>()
   const start = raw.indexOf('{')
@@ -81,6 +82,7 @@ export async function cleanTranscript(
   entries: Entry[],
   onProgress?: CleanProgress,
   startLine = 0,
+  contextBlock?: string,
 ): Promise<CleanResult> {
   const out = entries.map((e) => ({ ...e }))
   const total = out.length
@@ -93,7 +95,7 @@ export async function cleanTranscript(
     try {
       const raw = await client.complete({
         system: CLEAN_SYSTEM_PROMPT,
-        user: buildCleanPrompt(chunk, start),
+        user: buildCleanPrompt(chunk, start, contextBlock),
         json: true,
       })
       return parseFixes(raw)

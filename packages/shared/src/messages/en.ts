@@ -169,7 +169,8 @@ export const en = {
   'ext.tab.transcript': 'Transcript',
   'ext.tab.diagram': 'Diagram',
   'ext.tab.ask': 'Ask',
-  'ext.tab.docs': 'Documents',
+  'ext.tab.context': '✦ Context & Goals',
+  'ext.tab.docs': 'Docs',
   'ext.meeting.views': 'Meeting views',
   'ext.meeting.nameLabel': 'Meeting name',
   'ext.meeting.rename': '{id} — click to rename',
@@ -315,6 +316,17 @@ export const en = {
   'ext.summary.contextSave': 'Save Context',
   'ext.summary.contextSaved': 'Context saved.',
 
+  // -- extension: context & goals --------------------------------------------
+  'ext.context.title': 'Context & Goals',
+  'ext.context.goals': 'Goals',
+  'ext.context.addGoal': 'Add a goal…',
+  'ext.context.suggestGoals': '✨ Suggest goals',
+  'ext.context.save': 'Save',
+  'ext.context.saved': 'Saved.',
+  'ext.context.copyAsMarkdown': 'Copy as Markdown',
+  'ext.context.applyToClean': 'Apply to clean transcript',
+  'ext.context.applyToSummary': 'Regenerate summary',
+
   // -- extension: ask -------------------------------------------------------
   'ext.ask.suggest1': 'What were the main decisions in this meeting?',
   'ext.ask.suggest2': 'Who owns the action items?',
@@ -371,8 +383,6 @@ export const en = {
   'ext.header.insertByTag': 'Insert by Tag',
   'ext.header.insertAllWithTag': 'Insert all #{tag} ({count})',
   'ext.header.insertSingle': 'Insert Individual',
-  'ext.header.tagAttached': 'Tag #{tag} attached to meeting.',
-  'ext.header.tagDetached': 'Tag #{tag} removed from meeting.',
   'ext.header.activeTags': 'Active Tags',
   'ext.header.noContextsAvailable': 'No contexts available. Add them in Knowledge Base first.',
   'ext.header.close': 'Close',

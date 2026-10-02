@@ -39,13 +39,14 @@ import {
   ensureReleaseT0,
   fetchLatestRelease,
   getAnalysis,
+  getGoals,
+  getMeetingTags,
+  getMiniContexts,
   getTitle,
   loadAnalyses,
   loadAudit,
   loadChat,
   loadClean,
-  getMeetingTags,
-  getMiniContexts,
   isLive,
   loadMeetings,
   loadSettings,
@@ -106,6 +107,7 @@ async function loadMeetingForAI(id: string): Promise<Meeting | null> {
 
   // §context: Enrich context with terms from active tags / glossary for AI accuracy
   const tags = meeting.tags ?? (await getMeetingTags(id));
+  const goals = meeting.goals ?? (await getGoals(id));
   let context = meeting.context ?? '';
   if (tags && tags.length > 0) {
     const miniContexts = await getMiniContexts();
@@ -122,7 +124,30 @@ async function loadMeetingForAI(id: string): Promise<Meeting | null> {
     }
   }
 
-  return { ...meeting, context, entries: baseEntries };
+  return { ...meeting, context, goals, entries: baseEntries };
+}
+
+async function buildCleanContextBlock(meeting: Meeting): Promise<string> {
+  const parts: string[] = [];
+  if (meeting.context?.trim()) parts.push(meeting.context.trim());
+  if (meeting.goals && meeting.goals.length > 0) {
+    const goals = meeting.goals.map((g, i) => `${i + 1}. ${g}`).join('\n');
+    parts.push(`Tujuan Rapat:\n${goals}`);
+  }
+  if (meeting.tags && meeting.tags.length > 0) {
+    const tagSet = new Set(meeting.tags.map((t) => t.toLowerCase()));
+    const miniContexts = await getMiniContexts();
+    const matched = miniContexts.filter(
+      (c) =>
+        tagSet.has(c.term.toLowerCase()) ||
+        c.tags.some((tg) => tagSet.has(tg.toLowerCase())),
+    );
+    if (matched.length > 0) {
+      const glossary = matched.map((c) => `[${c.term}]: ${c.definition}`).join('\n');
+      parts.push(`Istilah & Konteks Tambahan:\n${glossary}`);
+    }
+  }
+  return parts.join('\n\n');
 }
 
 // The notification id IS the meeting id, so onClicked can open that meeting.
@@ -404,6 +429,9 @@ async function handleCleanTranscript(
     total: base.length,
     entries: base,
   });
+  // Build context block from meeting context, goals, and attached mini-contexts
+  const meetingForAi = await loadMeetingForAI(id);
+  const contextBlock = meetingForAi ? await buildCleanContextBlock(meetingForAi) : undefined;
   try {
     const client = await makeInteractiveClient();
     const { entries, changed } = await cleanTranscript(
@@ -420,7 +448,9 @@ async function handleCleanTranscript(
         });
       },
       startLine,
+      contextBlock,
     );
+
     await saveClean(id, { status: 'done', entries, generatedAt: now(), changed });
     await appendAudit('clean', `${id}: ${changed} baris`);
     return { ok: true, changed };
@@ -430,8 +460,35 @@ async function handleCleanTranscript(
   }
 }
 
-// P0.1: the content script knows the *room* (the Meet/Teams link); which
-// *session* that is depends on what is already stored, so the decision is
+async function handleSuggestGoals(
+  id: string,
+): Promise<{ ok: true; goals: string[] } | { ok: false; error: string }> {
+  const meeting = await loadMeetingForAI(id);
+  if (!meeting) return { ok: false, error: t('ext.err.meetingNotFound') };
+  if (meeting.entries.length < 5) return { ok: true, goals: [] };
+
+  const client = await makeInteractiveClient();
+  const contextBlock = await buildCleanContextBlock(meeting);
+  const transcript = meeting.entries
+    .map((e, i) => `[${i}] ${e.speaker}: ${e.text}`)
+    .join('\n');
+  const system = `Kamu asisten rapat. Berdasarkan transcript dan konteks di bawah, infer 3-5 tujuan rapat yang konkret dan dapat dievaluasi.\n\nBalas HANYA dengan objek JSON valid berbentuk: {"goals": ["...", "..."]}. Tidak boleh ada teks lain.`;
+  const user = `Konteks Rapat & Tujuan:\n${contextBlock || '-'}\n\nTranscript:\n${transcript}`;
+
+  const raw = await client.complete({ system, user, json: true });
+  const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return { ok: true, goals: [] };
+  try {
+    const parsed = JSON.parse(match[0]);
+    const goals = Array.isArray(parsed?.goals) ? parsed.goals.filter((g: unknown) => typeof g === 'string') : [];
+    return { ok: true, goals };
+  } catch {
+    return { ok: true, goals: [] };
+  }
+}
+
+
 // made here — one implementation, shared with the tests, instead of a copy
 // of the rule inside content.js.
 async function handleResolveSession(raw: string): Promise<{ sessionId: string }> {
@@ -681,6 +738,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg?.type === 'clean-transcript' && msg.meetingId) {
     handleCleanTranscript(msg.meetingId, !!msg.fromScratch)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: (e as Error).message }));
+    return true; // async response
+  }
+  if (msg?.type === 'suggest-goals' && msg.meetingId) {
+    handleSuggestGoals(msg.meetingId)
       .then(sendResponse)
       .catch((e) => sendResponse({ ok: false, error: (e as Error).message }));
     return true; // async response

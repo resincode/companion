@@ -38,6 +38,13 @@ describe('buildCleanPrompt', () => {
     const p = buildCleanPrompt([entry('halo'), entry('dunia')], 10)
     expect(p).toBe('[10] A: halo\n[11] A: dunia')
   })
+
+  it('prepends an optional context block before the transcript', () => {
+    const p = buildCleanPrompt([entry('halo')], 0, 'Project Alpha release review')
+    expect(p).toContain('Konteks Rapat & Tujuan:')
+    expect(p).toContain('Project Alpha release review')
+    expect(p).toContain('[0] A: halo')
+  })
 })
 
 describe('cleanTranscript', () => {

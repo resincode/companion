@@ -166,7 +166,8 @@ export const id: Record<keyof typeof en, string> = {
   'ext.tab.transcript': 'Transcript',
   'ext.tab.diagram': 'Diagram',
   'ext.tab.ask': 'Tanya',
-  'ext.tab.docs': 'Dokumen',
+  'ext.tab.context': '✦ Konteks & Tujuan',
+  'ext.tab.docs': 'Docs',
   'ext.meeting.views': 'Tampilan meeting',
   'ext.meeting.nameLabel': 'Nama meeting',
   'ext.meeting.rename': '{id} — klik untuk ganti nama',
@@ -312,6 +313,17 @@ export const id: Record<keyof typeof en, string> = {
   'ext.summary.contextSave': 'Simpan Konteks',
   'ext.summary.contextSaved': 'Konteks disimpan.',
 
+  // -- extension: context & goals --------------------------------------------
+  'ext.context.title': 'Konteks & Tujuan',
+  'ext.context.goals': 'Tujuan',
+  'ext.context.addGoal': 'Tambah tujuan…',
+  'ext.context.suggestGoals': '✨ Sarankan tujuan',
+  'ext.context.save': 'Simpan',
+  'ext.context.saved': 'Disimpan.',
+  'ext.context.copyAsMarkdown': 'Salin sebagai Markdown',
+  'ext.context.applyToClean': 'Terapkan ke transcript rapi',
+  'ext.context.applyToSummary': 'Buat ulang ringkasan',
+
   // -- extension: ask -------------------------------------------------------
   'ext.ask.suggest1': 'Apa keputusan utama rapat ini?',
   'ext.ask.suggest2': 'Siapa yang bertanggung jawab atas action item?',
@@ -368,8 +380,6 @@ export const id: Record<keyof typeof en, string> = {
   'ext.header.insertByTag': 'Sisipkan Berdasarkan Tag',
   'ext.header.insertAllWithTag': 'Sisipkan semua #{tag} ({count})',
   'ext.header.insertSingle': 'Sisipkan Satuan',
-  'ext.header.tagAttached': 'Tag #{tag} dipasang ke rapat.',
-  'ext.header.tagDetached': 'Tag #{tag} dicopot dari rapat.',
   'ext.header.activeTags': 'Tag Aktif',
   'ext.header.noContextsAvailable': 'Belum ada konteks. Tambahkan di menu Knowledge Base terlebih dahulu.',
   'ext.header.close': 'Tutup',

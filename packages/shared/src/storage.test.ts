@@ -26,6 +26,9 @@ import {
   META_PREFIX,
   MINI_CONTEXTS_KEY,
   TITLE_PREFIX,
+  GOALS_PREFIX,
+  getGoals,
+  saveGoals,
   TRANSCRIPT_PREFIX,
   WATCH_DEBOUNCE_MS,
 } from './storage';
@@ -34,7 +37,6 @@ const entry = (text: string, time: string) => ({ speaker: 'A', text, time });
 
 const RAW: Record<string, unknown> = {
   [TRANSCRIPT_PREFIX + 'old']: [entry('x', '2026-01-01T01:00:00Z')],
-  [META_PREFIX + 'old']: { id: 'old', startedAt: '2026-01-01T01:00:00Z', lastSeenAt: '2026-01-01T02:00:00Z' },
   [TRANSCRIPT_PREFIX + 'new']: [entry('y', '2026-07-01T01:00:00Z')],
   [META_PREFIX + 'new']: { id: 'new', startedAt: '2026-07-01T01:00:00Z', lastSeenAt: '2026-07-01T02:00:00Z' },
   [ANALYSIS_PREFIX + 'new']: {
@@ -267,5 +269,32 @@ describe('release T0 (§32.1 gate anchor)', () => {
     expect(await ensureReleaseT0(1000)).toBe(1000);
     expect(await ensureReleaseT0(2000)).toBe(1000); // already set, second call is a no-op
     expect(await getReleaseT0()).toBe(1000);
+  });
+});
+describe('goals', () => {
+  it('saves and retrieves goals', async () => {
+    await saveGoals('m1', ['Align on Q4 roadmap', 'Assign owners']);
+    expect(await getGoals('m1')).toEqual(['Align on Q4 roadmap', 'Assign owners']);
+  });
+
+  it('returns an empty array when no goals are stored', async () => {
+    expect(await getGoals('missing')).toEqual([]);
+  });
+
+  it('removes goals when saving an empty list', async () => {
+    await saveGoals('m1', ['Goal 1']);
+    await saveGoals('m1', []);
+    expect(await getGoals('m1')).toEqual([]);
+    expect(store[GOALS_PREFIX + 'm1']).toBeUndefined();
+  });
+
+  it('parses goals from a storage dump', () => {
+    const raw: Record<string, unknown> = {
+      [TRANSCRIPT_PREFIX + 'm1']: [entry('hello', '2026-01-01T01:00:00Z')],
+      [META_PREFIX + 'm1']: { id: 'm1', startedAt: '2026-01-01T01:00:00Z', lastSeenAt: '2026-01-01T02:00:00Z' },
+      [GOALS_PREFIX + 'm1']: ['Goal A', 'Goal B'],
+    };
+    const meetings = parseMeetings(raw);
+    expect(meetings[0].goals).toEqual(['Goal A', 'Goal B']);
   });
 });

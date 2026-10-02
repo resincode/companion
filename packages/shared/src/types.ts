@@ -20,6 +20,7 @@ export interface Meeting {
   entries: Entry[];
   context?: string;
   tags?: string[];
+  goals?: string[];
 }
 
 export interface ActionItem {
